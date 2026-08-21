@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SigPeek — two PDFs, signatures stay in this tab</title>
+    <meta
+      name="description"
+      content="Drop two PDFs. See signatures, incremental saves, and a text diff. Nothing is uploaded."
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1c1917;
+        --muted: #57534e;
+        --line: #e7e5e4;
+        --bg: #fafaf9;
+        --card: #ffffff;
+        --accent: #0f766e;
+        --warn: #9a3412;
+        --add: #14532d;
+        --addbg: #dcfce7;
+        --del: #9f1239;
+        --delbg: #ffe4e6;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        line-height: 1.5;
+      }
+      main { max-width: 48rem; margin: 0 auto; padding: 4rem 1.5rem 5rem; }
+      h1 { font-size: 2rem; letter-spacing: -0.03em; margin: 0 0 0.75rem; }
+      h2 { font-size: 1.05rem; margin: 2rem 0 0.5rem; }
+      .kicker { color: var(--muted); font-size: 0.875rem; font-weight: 600; margin: 0 0 0.75rem; }
+      .lede { color: var(--muted); font-size: 1.125rem; max-width: 38rem; }
+      .drops { display: grid; gap: 0.75rem; grid-template-columns: 1fr; margin: 2rem 0 1rem; }
+      @media (min-width: 640px) { .drops { grid-template-columns: 1fr 1fr; } }
+      .drop {
+        border: 1px dashed #d6d3d1;
+        border-radius: 1rem;
+        background: var(--card);
+        padding: 1.5rem 1.1rem;
+        text-align: center;
+        min-height: 8.5rem;
+        cursor: pointer;
+      }
+      .drop.over { border-color: var(--accent); background: #f0fdfa; }
+      .drop.filled { border-style: solid; }
+      .drop strong { display: block; }
+      .drop span { color: var(--muted); font-size: 0.875rem; }
+      button {
+        appearance: none;
+        border: 0;
+        background: var(--ink);
+        color: white;
+        border-radius: 0.6rem;
+        padding: 0.6rem 1rem;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.secondary { background: white; color: var(--ink); border: 1px solid var(--line); }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      .meta { color: var(--muted); font-size: 0.875rem; }
+      .row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+      .cards { display: grid; gap: 0.75rem; grid-template-columns: 1fr; }
+      @media (min-width: 640px) { .cards { grid-template-columns: 1fr 1fr 1fr; } }
+      .cards article, table.facts {
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        background: var(--card);
+      }
+      .cards article { padding: 1rem; }
+      .cards h2 { font-size: 1rem; margin: 0 0 0.4rem; }
+      .cards p { margin: 0; color: var(--muted); font-size: 0.875rem; }
+      table.facts { width: 100%; border-collapse: collapse; overflow: hidden; font-size: 0.9rem; }
+      table.facts th, table.facts td { text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+      table.facts th { width: 28%; color: var(--muted); font-weight: 600; }
+      table.facts tr:last-child th, table.facts tr:last-child td { border-bottom: 0; }
+      .pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 0.1rem 0.55rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        background: #e7e5e4;
+      }
+      .pill.yes { background: #ffedd5; color: var(--warn); }
+      .pill.ok { background: #ccfbf1; color: var(--accent); }
+      .diff {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.78rem;
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        background: var(--card);
+        max-height: 22rem;
+        overflow: auto;
+        padding: 0.4rem 0;
+      }
+      .diff div { padding: 0.15rem 0.75rem; white-space: pre-wrap; word-break: break-word; }
+      .diff .add { background: var(--addbg); color: var(--add); }
+      .diff .del { background: var(--delbg); color: var(--del); }
+      .diff .same { color: var(--muted); }
+      footer {
+        margin-top: 3rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      a { color: inherit; }
+      .warn { color: var(--warn); font-size: 0.875rem; min-height: 1.3em; }
+      input[type="file"] { display: none; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="kicker">One job. Two files. This tab.</p>
+      <h1>SigPeek</h1>
+      <p class="lede">
+        Drop two versions of a PDF. Get signatures, extra <code>%%EOF</code> saves, and a text diff.
+        Files never leave the browser.
+      </p>
+
+      <div class="drops">
+        <label class="drop" id="dropA" for="fileA">
+          <strong>Original</strong>
+          <span id="nameA">PDF, 12 MB max</span>
+        </label>
+        <label class="drop" id="dropB" for="fileB">
+          <strong>Revised</strong>
+          <span id="nameB">PDF, 12 MB max</span>
+        </label>
+      </div>
+      <input id="fileA" type="file" accept="application/pdf,.pdf" />
+      <input id="fileB" type="file" accept="application/pdf,.pdf" />
+      <p class="warn" id="warn"></p>
+      <div class="row">
+        <button id="run" disabled>Compare</button>
+        <button class="secondary" id="reset" type="button">Clear</button>
+      </div>
+      <p class="meta">Cap: 2 files, 12 MB each. Heuristic only — not a court exhibit.</p>
+
+      <div id="out" class="hidden">
+        <h2>What jumped out</h2>
+        <div class="cards" id="flags"></div>
+        <h2>File facts</h2>
+        <table class="facts" id="facts"></table>
+        <h2>Text that moved</h2>
+        <p class="meta" id="diffMeta"></p>
+        <div class="diff" id="diff"></div>
+      </div>
+
+      <div class="cards" style="margin-top:2rem">
+        <article>
+          <h2>Signatures</h2>
+          <p><code>/Type /Sig</code> and a <code>ByteRange</code> usually mean someone applied a digital signature. Extra <code>%%EOF</code> after that is a later incremental save.</p>
+        </article>
+        <article>
+          <h2>No upload</h2>
+          <p>The files are read in this tab. There is no account and no server copy.</p>
+        </article>
+        <article>
+          <h2>Limits</h2>
+          <p>Text is pulled from PDF strings, not a full layout engine. Scanned pages will look empty.</p>
+        </article>
+      </div>
+
+      <footer>
+        Reply to people comparing two versions of a signed PDF by hand:
+        “Drop both files here. Nothing is uploaded. You get signature markers, extra EOF saves, and a text diff.”
+        <br /><br />
+        Ask:
+        <a href="https://www.reddit.com/r/pdf/comments/1vmiui1/can_someone_help_me_understand_whether_these_pdf/">r/pdf — was this signed PDF edited?</a>
+        ·
+        <a href="https://github.com/davidlifschitz/gtm-sigpeek">source</a>
+      </footer>
+    </main>
+    <script>
+      const MAX = 12 * 1024 * 1024;
+      const files = { a: null, b: null };
+      const $ = (id) => document.getElementById(id);
+
+      function latin(buf) {
+        return new TextDecoder("latin-1").decode(buf);
+      }
+
+      function count(re, s) {
+        return (s.match(re) || []).length;
+      }
+
+      function first(re, s) {
+        const m = s.match(re);
+        return m ? m[1] : "—";
+      }
+
+      function all(re, s) {
+        return [...s.matchAll(re)].map((m) => m[1]);
+      }
+
+      function unescapePdf(str) {
+        return str
+          .replace(/\\n/g, "\n")
+          .replace(/\\r/g, "\n")
+          .replace(/\\t/g, "\t")
+          .replace(/\\\\/g, "\\")
+          .replace(/\\([()])/g, "$1")
+          .replace(/\\(\d{1,3})/g, (_, n) => String.fromCharCode(parseInt(n, 8)));
+      }
+
+      function extractText(s) {
+        const out = [];
+        const re = /\(([^\\()]*(?:\\.[^\\()]*)*)\)/g;
+        let m;
+        while ((m = re.exec(s))) {
+          const t = unescapePdf(m[1]).replace(/\s+/g, " ").trim();
+          if (t.length >= 3 && /[A-Za-z0-9]/.test(t)) out.push(t);
+        }
+        return out;
+      }
+
+      function lineDiff(a, b) {
+        const A = a.filter((x, i) => x !== a[i - 1]);
+        const B = b.filter((x, i) => x !== b[i - 1]);
+        const setA = new Set(A);
+        const setB = new Set(B);
+        const rows = [];
+        for (const line of A) {
+          if (!setB.has(line)) rows.push({ k: "del", t: line });
+        }
+        for (const line of B) {
+          if (!setA.has(line)) rows.push({ k: "add", t: line });
+        }
+        if (!rows.length) {
+          const n = Math.min(12, A.length);
+          for (let i = 0; i < n; i++) rows.push({ k: "same", t: A[i] });
+        }
+        return rows.slice(0, 200);
+      }
+
+      async function sha256(buf) {
+        const h = await crypto.subtle.digest("SHA-256", buf);
+        return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, "0")).join("");
+      }
+
+      function inspect(name, size, raw, hash) {
+        const s = latin(raw);
+        const eof = count(/%%EOF/g, s);
+        const sig = count(/\/Type\s*\/Sig\b/g, s);
+        const byteRange = count(/\/ByteRange\s*\[/g, s);
+        const prev = count(/\/Prev\s+\d+/g, s);
+        const pages = Math.max(count(/\/Type\s*\/Page\b/g, s), 0);
+        const catalogCount = first(/\/Type\s*\/Pages[\s\S]{0,240}?\/Count\s+(\d+)/, s);
+        const producer = first(/\/Producer\s*\(([^\\()]*(?:\\.[^\\()]*)*)\)/, s);
+        const creator = first(/\/Creator\s*\(([^\\()]*(?:\\.[^\\()]*)*)\)/, s);
+        const created = all(/\/CreationDate\s*\(([^)]+)\)/g, s);
+        const modified = all(/\/ModDate\s*\(([^)]+)\)/g, s);
+        const startxref = all(/startxref\s+(\d+)/g, s);
+        return {
+          name,
+          size,
+          hash,
+          eof,
+          sig,
+          byteRange,
+          prev,
+          pages,
+          catalogCount,
+          producer: unescapePdf(producer),
+          creator: unescapePdf(creator),
+          created: created.slice(-1)[0] || "—",
+          modified: modified.slice(-1)[0] || "—",
+          xrefs: startxref.length,
+          text: extractText(s),
+        };
+      }
+
+      function pill(ok, yes, no) {
+        return `<span class="pill ${ok ? "yes" : "ok"}">${ok ? yes : no}</span>`;
+      }
+
+      function bindDrop(el, input, key, nameEl) {
+        const set = (file) => {
+          $("warn").textContent = "";
+          if (!file) return;
+          if (file.size > MAX) {
+            $("warn").textContent = file.name + " is over 12 MB.";
+            return;
+          }
+          if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
+            $("warn").textContent = "Need a .pdf";
+            return;
+          }
+          files[key] = file;
+          el.classList.add("filled");
+          nameEl.textContent = file.name + " · " + (file.size / 1024).toFixed(0) + " KB";
+          $("run").disabled = !(files.a && files.b);
+        };
+        el.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          el.classList.add("over");
+        });
+        el.addEventListener("dragleave", () => el.classList.remove("over"));
+        el.addEventListener("drop", (e) => {
+          e.preventDefault();
+          el.classList.remove("over");
+          set(e.dataTransfer.files[0]);
+        });
+        input.addEventListener("change", () => set(input.files[0]));
+      }
+
+      bindDrop($("dropA"), $("fileA"), "a", $("nameA"));
+      bindDrop($("dropB"), $("fileB"), "b", $("nameB"));
+
+      $("reset").onclick = () => {
+        files.a = files.b = null;
+        $("fileA").value = $("fileB").value = "";
+        $("nameA").textContent = "PDF, 12 MB max";
+        $("nameB").textContent = "PDF, 12 MB max";
+        $("dropA").classList.remove("filled");
+        $("dropB").classList.remove("filled");
+        $("run").disabled = true;
+        $("out").classList.add("hidden");
+        $("warn").textContent = "";
+      };
+
+      $("run").onclick = async () => {
+        $("warn").textContent = "";
+        const [bufA, bufB] = await Promise.all([files.a.arrayBuffer(), files.b.arrayBuffer()]);
+        const [hashA, hashB] = await Promise.all([sha256(bufA), sha256(bufB)]);
+        const A = inspect(files.a.name, files.a.size, bufA, hashA);
+        const B = inspect(files.b.name, files.b.size, bufB, hashB);
+        const flags = [];
+        if (hashA === hashB) flags.push(["Same bytes", "The two files are identical. Nothing was edited."]);
+        if (A.sig || B.sig) flags.push(["Signature object", (A.sig ? A.sig : 0) + " in original, " + (B.sig ? B.sig : 0) + " in revised."]);
+        if (B.eof > A.eof) flags.push(["Extra EOF", "Revised has more %%EOF markers (" + A.eof + " → " + B.eof + "). That is how incremental saves look."]);
+        else if (A.eof > 1 || B.eof > 1) flags.push(["Incremental save", "More than one %%EOF means the file was appended to, not rewritten from scratch."]);
+        if (B.prev > A.prev) flags.push(["/Prev grew", "Revised points at an older xref. Typical after an incremental update."]);
+        if (A.created !== "—" && B.created !== "—" && A.created === B.created && A.modified !== B.modified)
+          flags.push(["Same birth, new ModDate", "CreationDate matches; ModDate does not. Someone saved again."]);
+        if (A.pages !== B.pages || A.catalogCount !== B.catalogCount)
+          flags.push(["Page count moved", "Original " + (A.catalogCount || A.pages) + ", revised " + (B.catalogCount || B.pages) + "."]);
+        if (!flags.length) flags.push(["Quiet files", "No signature or extra EOF. You still get the text diff below."]);
+
+        $("flags").innerHTML = flags
+          .map(([t, p]) => `<article><h2>${t}</h2><p>${p}</p></article>`)
+          .join("");
+
+        const rows = [
+          ["Name", A.name, B.name],
+          ["Size", A.size.toLocaleString() + " B", B.size.toLocaleString() + " B"],
+          ["SHA-256", A.hash.slice(0, 16) + "…", B.hash.slice(0, 16) + "…"],
+          ["%%EOF", A.eof, B.eof],
+          ["/Type /Sig", A.sig, B.sig],
+          ["ByteRange", A.byteRange, B.byteRange],
+          ["/Prev", A.prev, B.prev],
+          ["startxref", A.xrefs, B.xrefs],
+          ["/Count or /Page", A.catalogCount + " / " + A.pages, B.catalogCount + " / " + B.pages],
+          ["CreationDate", A.created, B.created],
+          ["ModDate", A.modified, B.modified],
+          ["Producer", A.producer, B.producer],
+        ];
+        $("facts").innerHTML =
+          "<tr><th></th><th>Original</th><th>Revised</th></tr>" +
+          rows
+            .map(
+              ([k, a, b]) =>
+                `<tr><th>${k}</th><td>${a} ${a === b ? "" : pill(true, "diff", "")}</td><td>${b}</td></tr>`
+            )
+            .join("");
+
+        const diff = lineDiff(A.text, B.text);
+        const added = diff.filter((d) => d.k === "add").length;
+        const removed = diff.filter((d) => d.k === "del").length;
+        $("diffMeta").textContent =
+          A.text.length + " strings vs " + B.text.length + " · " + removed + " gone · " + added + " new";
+        $("diff").innerHTML = diff
+          .map((d) => `<div class="${d.k}">${d.k === "add" ? "+" : d.k === "del" ? "−" : " "} ${escapeHtml(d.t)}</div>`)
+          .join("");
+        $("out").classList.remove("hidden");
+      };
+
+      function escapeHtml(t) {
+        return t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      }
+    </script>
+  </body>
+</html>
