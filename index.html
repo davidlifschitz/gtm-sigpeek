@@ -244,7 +244,7 @@
           const n = Math.min(12, A.length);
           for (let i = 0; i < n; i++) rows.push({ k: "same", t: A[i] });
         }
-        return rows.slice(0, 200);
+        return rows;
       }
 
       async function sha256(buf) {
@@ -378,11 +378,14 @@
             )
             .join("");
 
-        const diff = lineDiff(A.text, B.text);
-        const added = diff.filter((d) => d.k === "add").length;
-        const removed = diff.filter((d) => d.k === "del").length;
+        const full = lineDiff(A.text, B.text);
+        const diff = full.slice(0, 200);
+        const added = full.filter((d) => d.k === "add").length;
+        const removed = full.filter((d) => d.k === "del").length;
+        const hidden = full.length - diff.length;
         $("diffMeta").textContent =
-          A.text.length + " strings vs " + B.text.length + " · " + removed + " gone · " + added + " new";
+          A.text.length + " strings vs " + B.text.length + " · " + removed + " gone · " + added + " new" +
+          (hidden ? " · " + hidden + " more not shown" : "");
         $("diff").innerHTML = diff
           .map((d) => `<div class="${d.k}">${d.k === "add" ? "+" : d.k === "del" ? "−" : " "} ${escapeHtml(d.t)}</div>`)
           .join("");
