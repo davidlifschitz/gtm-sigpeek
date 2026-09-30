@@ -41,3 +41,13 @@ describe("compare", () => {
     expect(w.latin(new Uint8Array([0x25, 0xe2, 0x80, 0x9c, 0xff]).buffer)).toBe("%\u00e2\u0080\u009c\u00ff");
   });
 });
+
+describe("untrusted PDF fields", () => {
+  it("renders metadata and file names as text", async () => {
+    const evil = "<img src=x onerror=window.__pwned=1>";
+    const w = await compare(pdf({ producer: evil }), pdf({ producer: evil, text: ["x" + evil] }), [evil + ".pdf", "b.pdf"]);
+    expect(w.document.querySelector("#facts img")).toBeNull();
+    expect(fact(w, "Producer").cells[1].textContent).toContain(evil);
+    expect(fact(w, "Name").cells[1].textContent).toContain(evil + ".pdf");
+  });
+});

@@ -374,7 +374,7 @@
           rows
             .map(
               ([k, a, b]) =>
-                `<tr><th>${k}</th><td>${a} ${a === b ? "" : pill(true, "diff", "")}</td><td>${b}</td></tr>`
+                `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(a)} ${a === b ? "" : pill(true, "diff", "")}</td><td>${escapeHtml(b)}</td></tr>`
             )
             .join("");
 
@@ -390,7 +390,7 @@
       };
 
       function escapeHtml(t) {
-        return t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+        return String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       }
     </script>
   </body>
