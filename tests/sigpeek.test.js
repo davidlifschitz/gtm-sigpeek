@@ -51,3 +51,15 @@ describe("untrusted PDF fields", () => {
     expect(fact(w, "Name").cells[1].textContent).toContain(evil + ".pdf");
   });
 });
+
+describe("diff cap", () => {
+  it("counts the full diff and says how many rows are hidden", async () => {
+    const a = Array.from({ length: 150 }, (_, i) => `old line ${i}`);
+    const b = Array.from({ length: 150 }, (_, i) => `new line ${i}`);
+    const w = await compare(pdf({ text: a }), pdf({ text: b }));
+    expect(w.document.querySelectorAll("#diff > div.add, #diff > div.del")).toHaveLength(200);
+    const meta = w.document.getElementById("diffMeta").textContent;
+    expect(meta).toContain("150 gone · 150 new");
+    expect(meta).toContain("100 more not shown");
+  });
+});
