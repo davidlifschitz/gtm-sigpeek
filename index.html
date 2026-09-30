@@ -113,7 +113,8 @@
       }
       a { color: inherit; }
       .warn { color: var(--warn); font-size: 0.875rem; min-height: 1.3em; }
-      input[type="file"] { display: none; }
+      input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+      .drop:focus-within, .drop.focus { outline: 3px solid var(--accent); outline-offset: 2px; }
       .hidden { display: none; }
     </style>
   </head>
@@ -136,9 +137,9 @@
           <span id="nameB">PDF, 12 MB max</span>
         </label>
       </div>
-      <input id="fileA" type="file" accept="application/pdf,.pdf" />
-      <input id="fileB" type="file" accept="application/pdf,.pdf" />
-      <p class="warn" id="warn"></p>
+      <input id="fileA" aria-label="Original PDF" type="file" accept="application/pdf,.pdf" />
+      <input id="fileB" aria-label="Revised PDF" type="file" accept="application/pdf,.pdf" />
+      <p class="warn" id="warn" role="alert"></p>
       <div class="row">
         <button id="run" disabled>Compare</button>
         <button class="secondary" id="reset" type="button">Clear</button>
@@ -151,7 +152,7 @@
         <h2>File facts</h2>
         <table class="facts" id="facts"></table>
         <h2>Text that moved</h2>
-        <p class="meta" id="diffMeta"></p>
+        <p class="meta" id="diffMeta" aria-live="polite"></p>
         <div class="diff" id="diff"></div>
       </div>
 
@@ -316,6 +317,8 @@
           set(e.dataTransfer.files[0]);
         });
         input.addEventListener("change", () => set(input.files[0]));
+        input.addEventListener("focus", () => el.classList.add("focus"));
+        input.addEventListener("blur", () => el.classList.remove("focus"));
       }
 
       bindDrop($("dropA"), $("fileA"), "a", $("nameA"));
@@ -370,11 +373,11 @@
           ["Producer", A.producer, B.producer],
         ];
         $("facts").innerHTML =
-          "<tr><th></th><th>Original</th><th>Revised</th></tr>" +
+          "<tr><td></td><th scope=\"col\">Original</th><th scope=\"col\">Revised</th></tr>" +
           rows
             .map(
               ([k, a, b]) =>
-                `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(a)} ${a === b ? "" : pill(true, "diff", "")}</td><td>${escapeHtml(b)}</td></tr>`
+                `<tr><th scope="row">${escapeHtml(k)}</th><td>${escapeHtml(a)} ${a === b ? "" : pill(true, "diff", "")}</td><td>${escapeHtml(b)}</td></tr>`
             )
             .join("");
 

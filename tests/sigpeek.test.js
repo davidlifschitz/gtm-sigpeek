@@ -63,3 +63,18 @@ describe("diff cap", () => {
     expect(meta).toContain("100 more not shown");
   });
 });
+
+describe("accessibility", () => {
+  it("keeps file inputs focusable and announces warnings and results", async () => {
+    const w = load();
+    const css = w.document.querySelector("style").textContent;
+    expect(css).not.toMatch(/input\[type="file"\]\s*\{\s*display:\s*none/);
+    expect(w.document.getElementById("fileA").getAttribute("aria-label")).toMatch(/original/i);
+    expect(w.document.getElementById("fileB").getAttribute("aria-label")).toMatch(/revised/i);
+    expect(w.document.getElementById("warn").getAttribute("role")).toBe("alert");
+    expect(w.document.getElementById("diffMeta").getAttribute("aria-live")).toBe("polite");
+    const r = await compare(pdf(), pdf({ text: ["other"] }));
+    expect(r.document.querySelector("#facts th[scope=col]")).not.toBeNull();
+    expect(r.document.querySelector("#facts th[scope=row]")).not.toBeNull();
+  });
+});
